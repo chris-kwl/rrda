@@ -54,6 +54,7 @@ type Message struct {
 	Answer     []*Section  `json:"answer"`
 	Authority  []*Section  `json:"authority,omitempty"`
 	Additional []*Section  `json:"additional,omitempty"`
+	RCode      int         `json:"rcode"`
 }
 
 // Return rdata
@@ -71,7 +72,7 @@ func error(w http.ResponseWriter, status int, code int, message string) {
 }
 
 // Generate JSON output
-func jsonify(w http.ResponseWriter, r *http.Request, question []dns.Question, answer []dns.RR, authority []dns.RR, additional []dns.RR) {
+func jsonify(w http.ResponseWriter, r *http.Request, question []dns.Question, answer []dns.RR, authority []dns.RR, additional []dns.RR, rcode int) {
 	var answerArray, authorityArray, additionalArray []*Section
 
 	callback := r.URL.Query().Get("callback")
@@ -87,8 +88,8 @@ func jsonify(w http.ResponseWriter, r *http.Request, question []dns.Question, an
 	for _, additional := range additional {
 		additionalArray = append(additionalArray, &Section{additional.Header().Name, dns.TypeToString[additional.Header().Rrtype], dns.ClassToString[additional.Header().Class], additional.Header().Ttl, additional.Header().Rdlength, rdata(additional)})
 	}
-
-	if json, err := json.MarshalIndent(Message{[]*Question{&Question{question[0].Name, dns.TypeToString[question[0].Qtype], dns.ClassToString[question[0].Qclass]}}, answerArray, authorityArray, additionalArray}, "", "    "); err == nil {
+	
+	if json, err := json.MarshalIndent(Message{[]*Question{&Question{question[0].Name, dns.TypeToString[question[0].Qtype], dns.ClassToString[question[0].Qclass]}}, answerArray, authorityArray, additionalArray, rcode}, "", "    "); err == nil {
 		if callback != "" {
 			io.WriteString(w, callback+"("+string(json)+");")
 		} else {
@@ -123,7 +124,7 @@ Redo:
 		case dns.RcodeRefused:
 			error(w, 500, 505, "The name server refuses to perform the specified operation for policy or security reasons (REFUSED)")
 		default:
-			jsonify(w, r, in.Question, in.Answer, in.Ns, in.Extra)
+				jsonify(w, r, in.Question, in.Answer, in.Ns, in.Extra, in.Rcode)
 		}
 	} else {
 		error(w, 500, 501, "DNS server could not be reached")
@@ -178,7 +179,7 @@ func main() {
 	flag.Parse()
 
 	if *version {
-		fmt.Println("RRDA 1.1.0")
+		fmt.Println("RRDA 1.1.1-chris-kwl")
 		os.Exit(0)
 	}
 
